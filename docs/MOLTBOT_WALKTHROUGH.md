@@ -129,3 +129,25 @@ graph TD
 
 - **상시 비용 관리**: Nova 2 Lite 도입으로 약 500달러 수준의 AWS 크레딧 예산 안에서 장기적인 안정 운영이 가능합니다.
 - **모니터링 방법**: 주기적으로 SSM을 통해 접속하여 `journalctl --user -u openclaw-gateway -n 50 --no-pager` 명령어로 이벤트 루프 상태와 디스코드 연동 라이프사이클을 모니터링할 것을 권장합니다.
+
+### 🛑 서버 및 봇 셧다운(종료) 가이드
+
+비용 절감이나 유지보수를 위해 봇을 종료해야 할 경우 아래 명령어를 사용합니다.
+
+#### 1. 인스턴스 완전 종료 (비용 절감 목적 - 추천)
+서버 자체를 중지하여 EC2 과금을 멈추려면 로컬 터미널에서 다음 명령어를 실행합니다.
+```bash
+aws ec2 stop-instances --instance-ids i-01763ec5c940a540e --region us-east-1 --profile aws-dimly
+```
+*다시 시작하려면 `stop-instances`를 `start-instances`로 변경하여 실행합니다.*
+
+#### 2. 봇 서비스만 잠시 중지 (서버 유지)
+서버는 켜두되 디스코드/왓츠앱 등에서 봇만 응답하지 않게 하려면 백그라운드 서비스를 중지합니다.
+```bash
+aws ssm send-command \
+  --target i-01763ec5c940a540e \
+  --region us-east-1 \
+  --profile aws-dimly \
+  --document-name "AWS-RunShellScript" \
+  --parameters 'commands=["sudo -u ubuntu XDG_RUNTIME_DIR=/run/user/1000 systemctl --user stop openclaw-gateway"]'
+```
