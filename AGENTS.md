@@ -18,10 +18,11 @@ This is **not** an application codebase -- it is infrastructure-as-code (CloudFo
 ├── images/                        # Screenshots for documentation
 ├── README.md                      # Primary documentation (English)
 ├── README_CN.md                   # Chinese documentation
-├── DEPLOYMENT.md                  # Step-by-step deployment guide
 ├── SECURITY.md                    # Security architecture and best practices
-├── TROUBLESHOOTING.md             # Common issues and resolution steps
-├── QUICK_START_KIRO.md            # Kiro AI-guided deployment quickstart
+├── docs/                          # Documentation
+│   ├── DEPLOYMENT.md              # Step-by-step deployment guide
+│   ├── TROUBLESHOOTING.md         # Common issues and resolution steps
+│   └── QUICK_START_KIRO.md        # Kiro AI-guided deployment quickstart
 ├── CONTRIBUTING.md                # Contribution guidelines
 ├── CODE_OF_CONDUCT.md             # Amazon Open Source Code of Conduct
 └── LICENSE                        # MIT No Attribution

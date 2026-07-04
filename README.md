@@ -108,7 +108,7 @@ aws cloudformation wait stack-create-complete \
 
 Prefer a guided experience? [Kiro](https://kiro.dev/) walks you through deployment conversationally — just open this repo as a workspace and say "help me deploy OpenClaw".
 
-**[→ Kiro Deployment Guide](QUICK_START_KIRO.md)**
+**[→ Kiro Deployment Guide](docs/QUICK_START_KIRO.md)**
 
 ---
 
@@ -340,7 +340,7 @@ Telegram/WhatsApp message
 | Cost for 50 users | ~$65-110/month (~$1.30-2.20/person) |
 | vs ChatGPT Plus (50 users) | $1,000/month |
 
-**[→ Full Multi-Tenant Guide](README_ENTERPRISE.md)** · **[→ Roadmap](ROADMAP.md)**
+**[→ Full Multi-Tenant Guide](README_ENTERPRISE.md)** · **[→ Roadmap](docs/ROADMAP.md)**
 
 ### 🏢 Enterprise Digital Workforce Platform — [enterprise/](enterprise/)
 
@@ -522,9 +522,9 @@ tail -f ~/.openclaw/*.log
 
 ## Troubleshooting
 
-Common issues and fixes: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+Common issues and fixes: [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 
-Step-by-step deployment guide: [DEPLOYMENT.md](DEPLOYMENT.md)
+Step-by-step deployment guide: [DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ---
 
@@ -540,7 +540,7 @@ Areas where we need help most:
 - Cost benchmarking (AgentCore vs EC2)
 - Security audits and penetration testing
 
-**[→ Roadmap](ROADMAP.md)** · **[→ Contributing Guide](CONTRIBUTING.md)** · **[→ GitHub Issues](https://github.com/aws-samples/sample-OpenClaw-on-AWS-with-Bedrock/issues)**
+**[→ Roadmap](docs/ROADMAP.md)** · **[→ Contributing Guide](CONTRIBUTING.md)** · **[→ GitHub Issues](https://github.com/aws-samples/sample-OpenClaw-on-AWS-with-Bedrock/issues)**
 
 ## Resources
 

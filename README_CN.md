@@ -91,7 +91,7 @@ aws cloudformation wait stack-create-complete \
 
 更轻松的方式？[Kiro](https://kiro.dev/) 通过对话引导你完成部署 — 打开本仓库作为工作区，说"帮我部署 OpenClaw"即可。
 
-**[→ Kiro 部署指南](QUICK_START_KIRO.md)**
+**[→ Kiro 部署指南](docs/QUICK_START_KIRO.md)**
 
 ---
 
@@ -245,7 +245,7 @@ WhatsApp 和 Telegram 支持语音消息 — OpenClaw 会转录并回复。
 
 ### 多租户平台（AgentCore Runtime）— [README_ENTERPRISE.md](README_ENTERPRISE.md)
 
-> ⚠️ 开发中 — 目标 2026 年 6 月 v1.0。[路线图 →](ROADMAP.md)
+> ⚠️ 开发中 — 目标 2026 年 6 月 v1.0。[路线图 →](docs/ROADMAP.md)
 
 将 OpenClaw 从单用户工具变成企业平台：每位员工一个 AI 助手，每个团队一个 AI 助手，每个部门一个 AI 助手 — 边界清晰，能力共享，集中治理。
 
@@ -261,7 +261,7 @@ WhatsApp 和 Telegram 支持语音消息 — OpenClaw 会转录并回复。
 
 **本地 Demo**：`python3 demo/console.py` → 打开 http://localhost:8099 查看管理控制台
 
-**[→ 多租户完整文档 (EN)](README_ENTERPRISE.md)** · **[→ 多租户完整文档 (中文)](README_ENTERPRISE_CN.md)** · **[→ 路线图](ROADMAP.md)**
+**[→ 多租户完整文档 (EN)](README_ENTERPRISE.md)** · **[→ 多租户完整文档 (中文)](README_ENTERPRISE_CN.md)** · **[→ 路线图](docs/ROADMAP.md)**
 
 ### EKS (Kubernetes) — 容器原生部署
 
@@ -341,9 +341,9 @@ openclaw gateway status
 
 ## 故障排查
 
-常见问题和解决方案：[TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+常见问题和解决方案：[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 
-分步部署指南：[DEPLOYMENT.md](DEPLOYMENT.md)
+分步部署指南：[DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 ---
 
@@ -358,7 +358,7 @@ openclaw gateway status
 - 成本对比测试（AgentCore vs EC2）
 - 安全审计和渗透测试
 
-**[→ 路线图](ROADMAP.md)** · **[→ 贡献指南](CONTRIBUTING.md)** · **[→ GitHub Issues](https://github.com/aws-samples/sample-OpenClaw-on-AWS-with-Bedrock/issues)**
+**[→ 路线图](docs/ROADMAP.md)** · **[→ 贡献指南](CONTRIBUTING.md)** · **[→ GitHub Issues](https://github.com/aws-samples/sample-OpenClaw-on-AWS-with-Bedrock/issues)**
 
 ## 资源
 
