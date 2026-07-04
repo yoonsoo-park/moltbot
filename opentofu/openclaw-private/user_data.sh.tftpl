@@ -1,0 +1,196 @@
+#!/bin/bash
+set -euo pipefail
+exec > >(tee /var/log/openclaw-bootstrap.log) 2>&1
+
+export DEBIAN_FRONTEND=noninteractive
+STATE_DIR=/home/ubuntu/.openclaw
+DATA_DIR=/data/openclaw
+
+echo "OpenClaw bootstrap start: $(date)"
+
+apt-get update
+apt-get install -y curl unzip ca-certificates gnupg jq
+
+DATA_DEVICE=""
+for dev in /dev/nvme1n1 /dev/xvdf /dev/sdf; do
+  if [ -b "$dev" ]; then
+    DATA_DEVICE="$dev"
+    break
+  fi
+done
+
+if [ -n "$DATA_DEVICE" ]; then
+  if ! blkid "$DATA_DEVICE" | grep -q ext4; then
+    mkfs.ext4 -L openclaw-data "$DATA_DEVICE"
+  fi
+  mkdir -p /data
+  mount "$DATA_DEVICE" /data || true
+  grep -q "LABEL=openclaw-data" /etc/fstab || echo "LABEL=openclaw-data /data ext4 defaults,nofail 0 2" >> /etc/fstab
+  mkdir -p "$DATA_DIR"
+  chown -R ubuntu:ubuntu /data
+
+  if mountpoint -q "$STATE_DIR"; then
+    umount "$STATE_DIR" || true
+  fi
+  if [ -L "$STATE_DIR" ]; then
+    rm -f "$STATE_DIR"
+  elif [ -e "$STATE_DIR" ]; then
+    shopt -s dotglob nullglob
+    for f in "$STATE_DIR"/*; do
+      mv -n "$f" "$DATA_DIR"/ || true
+    done
+    shopt -u dotglob nullglob
+    rm -rf "$STATE_DIR"
+  fi
+  mkdir -p "$STATE_DIR"
+  chown ubuntu:ubuntu "$STATE_DIR"
+  mount --bind "$DATA_DIR" "$STATE_DIR"
+  grep -q "$DATA_DIR $STATE_DIR" /etc/fstab || echo "$DATA_DIR $STATE_DIR none bind 0 0" >> /etc/fstab
+else
+  mkdir -p "$STATE_DIR"
+  chown ubuntu:ubuntu "$STATE_DIR"
+fi
+
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo "/swapfile swap swap defaults 0 0" >> /etc/fstab
+  echo "vm.swappiness=10" >> /etc/sysctl.conf
+  sysctl vm.swappiness=10
+fi
+
+curl "https://awscli.amazonaws.com/awscli-exe-linux-$(arch).zip" -o /tmp/awscliv2.zip
+cd /tmp
+unzip -q awscliv2.zip
+./aws/install || true
+rm -rf /tmp/aws /tmp/awscliv2.zip
+
+snap start amazon-ssm-agent || systemctl start amazon-ssm-agent || true
+
+if [ "${enable_sandbox}" = "true" ]; then
+  install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  chmod a+r /etc/apt/keyrings/docker.asc
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
+  apt-get update
+  apt-get install -y docker-ce docker-ce-cli containerd.io
+  systemctl enable --now docker
+  usermod -aG docker ubuntu
+fi
+
+sudo -u ubuntu bash <<'UBUNTU_SCRIPT'
+set -euo pipefail
+cd "$HOME"
+curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh" -o /tmp/nvm-install.sh
+bash /tmp/nvm-install.sh
+rm -f /tmp/nvm-install.sh
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+nvm install 22.22.0
+nvm alias default 22.22.0
+npm config set registry https://registry.npmjs.org/
+npm install -g openclaw@${openclaw_version} --timeout=300000
+UBUNTU_SCRIPT
+
+OPENCLAW_MJS=$(find /home/ubuntu/.nvm -path "*/node_modules/openclaw/dist/index.js" -o -path "*/node_modules/openclaw/openclaw.mjs" 2>/dev/null | head -1)
+NODE_BIN=$(find /home/ubuntu/.nvm -name node -type f 2>/dev/null | head -1)
+if [ -z "$OPENCLAW_MJS" ] || [ -z "$NODE_BIN" ]; then
+  echo "FATAL: openclaw or node not found"
+  exit 1
+fi
+printf '#!/bin/bash\nexec %s %s "$@"\n' "$NODE_BIN" "$OPENCLAW_MJS" > /usr/local/bin/openclaw
+chmod +x /usr/local/bin/openclaw
+
+mkdir -p /home/ubuntu/.aws /home/ubuntu/.config/environment.d /home/ubuntu/.config/systemd/user "$STATE_DIR"
+cat > /home/ubuntu/.aws/config <<AWS_CONFIG
+[default]
+region = ${aws_region}
+output = json
+AWS_CONFIG
+cat > /home/ubuntu/.config/environment.d/openclaw.conf <<ENV_CONFIG
+AWS_REGION=${aws_region}
+AWS_DEFAULT_REGION=${aws_region}
+AWS_PROFILE=default
+OPENCLAW_STATE_DIR=$STATE_DIR
+ENV_CONFIG
+chown -R ubuntu:ubuntu /home/ubuntu/.aws /home/ubuntu/.config "$STATE_DIR"
+
+cat > "$STATE_DIR/.env" <<ENV_FILE
+AWS_PROFILE=default
+AWS_REGION=${aws_region}
+AWS_DEFAULT_REGION=${aws_region}
+OPENCLAW_LLM_PROVIDER=openai-oauth
+ENV_FILE
+
+cat > "$STATE_DIR/openclaw.json" <<OPENCLAW_CONFIG
+{
+  "gateway": {
+    "mode": "local",
+    "port": 18789,
+    "bind": "loopback",
+    "trustedProxies": ["10.0.0.0/16"],
+    "controlUi": {
+      "enabled": true,
+      "dangerouslyDisableDeviceAuth": true,
+      "allowedOrigins": []
+    },
+    "auth": {
+      "mode": "token",
+      "token": "${gateway_token}"
+    }
+  },
+  "models": {
+    "providers": {
+      "openai-codex": {
+        "api": "openai-completions",
+        "baseUrl": "https://api.openai.com/v1",
+        "models": [
+          {
+            "id": "${openai_model}",
+            "name": "OpenAI Model",
+            "input": ["text", "image"],
+            "contextWindow": 1000000,
+            "maxTokens": 128000
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "openai-codex/${openai_model}"
+      }
+    }
+  }
+}
+OPENCLAW_CONFIG
+chown -R ubuntu:ubuntu "$STATE_DIR"
+chmod 600 "$STATE_DIR/.env"
+
+loginctl enable-linger ubuntu
+systemctl start user@1000.service
+sleep 3
+
+sudo -H -u ubuntu XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus bash <<'GATEWAY'
+set -euo pipefail
+export HOME=/home/ubuntu
+export OPENCLAW_STATE_DIR=/home/ubuntu/.openclaw
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+openclaw gateway install || true
+systemctl --user daemon-reload
+systemctl --user enable --now openclaw-gateway.service
+GATEWAY
+
+aws ssm put-parameter \
+  --name "/openclaw/${name}/gateway-token" \
+  --value "${gateway_token}" \
+  --type SecureString \
+  --region "${aws_region}" \
+  --overwrite
+
+echo "OpenClaw bootstrap complete: $(date)"
+
