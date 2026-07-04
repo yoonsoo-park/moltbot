@@ -25,6 +25,13 @@ eks/terraform/*.tfvars
 !eks/terraform/*.tfvars.example
 eks/terraform/.terraform.lock.hcl
 
+# OpenTofu / Terraform local state
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+!**/*.tfvars.example
+
 # Demo
 enterprise/demo/dist/
 
