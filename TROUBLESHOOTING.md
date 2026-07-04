@@ -40,13 +40,8 @@ cat ~/.openclaw/openclaw.json | python3 -m json.tool
 # Get gateway token from SSM Parameter Store
 bash ~/ssm-portforward.sh
 
-# Test Bedrock connection
-REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
-aws bedrock-runtime invoke-model \
-  --model-id global.amazon.nova-2-lite-v1:0 \
-  --body '{"messages":[{"role":"user","content":[{"text":"Hello"}]}],"inferenceConfig":{"maxTokens":100}}' \
-  --region $REGION \
-  /tmp/test.json && cat /tmp/test.json
+# Check OpenAI OAuth/model auth status
+openclaw models status --probe
 ```
 
 ### View Setup Logs
@@ -68,32 +63,24 @@ sudo cat /var/log/cloud-init-output.log
 
 ## Common Issues
 
-### 1. "No API key found for amazon-bedrock" After Upgrade
+### 1. OpenAI OAuth Not Logged In
 
-**Symptom**: After upgrading OpenClaw (or deploying with version `2026.4.5` / `latest`), the agent fails with:
-```
-⚠ Agent failed before reply: No API key found for amazon-bedrock.
-Use /login or set an API key environment variable.
-```
+**Symptom**: The gateway is running, but model calls fail with a missing OpenAI credential or login-required message.
 
-**Cause**: OpenClaw 2026.4.5+ switched its model engine to `pi-coding-agent`, which no longer reads `"auth": "aws-sdk"` from the config file. It requires the `AWS_PROFILE` environment variable to discover IAM credentials from the EC2 instance profile (IMDS). The gateway systemd service does not inherit shell environment variables, so `AWS_PROFILE` is missing at runtime.
+**Cause**: This deployment intentionally does not use an OpenAI API key. You must complete OpenClaw's OpenAI Codex/ChatGPT OAuth login once after deployment.
 
-**Fix** (one command, no restart of EC2 needed):
+**Fix**:
 
 ```bash
-# SSM into the instance, switch to ubuntu
-sudo -u ubuntu bash
+aws ssm start-session --target <instance-id> --region <region>
 
-# Write AWS_PROFILE to the durable .env file (survives gateway reinstalls)
-echo "AWS_PROFILE=default" >> ~/.openclaw/.env
-
-# Restart gateway to pick up the change
+sudo -iu ubuntu
+openclaw models auth login --provider openai
+openclaw models status --probe
 systemctl --user restart openclaw-gateway.service
 ```
 
-> **Why this works**: `~/.openclaw/.env` is loaded by the gateway systemd service via `EnvironmentFile=`. Setting `AWS_PROFILE=default` tells the AWS SDK to resolve credentials from IMDS (EC2 instance profile), which is how Bedrock authentication works on EC2. This file is **not** overwritten by `openclaw gateway install --force` or upgrades.
-
-> **New deployments**: Templates updated after April 2026 write this file automatically during setup. Only existing deployments that upgrade in-place need this manual step.
+OpenClaw stores the OAuth access/refresh token in its auth store and refreshes it automatically. If refresh fails later, repeat the login command.
 
 ---
 

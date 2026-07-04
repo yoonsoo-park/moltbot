@@ -51,8 +51,9 @@ When `EnablePublicAccess=false` (default):
 5. **IMDSv2 enforcement** (prevents SSRF attacks)
 6. **EBS encryption** at rest (AWS managed keys)
 7. **S3 encryption** at rest (AES256)
-8. **IAM role-based authentication** (no API keys)
-9. **Docker sandbox** for exec isolation
+8. **OpenAI OAuth model authentication** (no OpenAI API key)
+9. **IAM role-based AWS management access**
+10. **Docker sandbox** for exec isolation
 
 ### Public Access (CloudFront + ALB)
 When `EnablePublicAccess=true`, adds:
@@ -68,27 +69,21 @@ When `EnablePublicAccess=true`, adds:
 
 ## Security Features
 
-### 1. IAM Role-Based Authentication
+### 1. OpenAI OAuth Provider Authentication
 
-**No API Keys**: The EC2 instance uses an IAM role to authenticate with Bedrock.
+**No OpenAI API Key**: Model invocation uses OpenClaw's OpenAI Codex/ChatGPT OAuth flow. The user logs in once after deployment with:
 
-```json
-{
-  "Effect": "Allow",
-  "Action": [
-    "bedrock:InvokeModel",
-    "bedrock:InvokeModelWithResponseStream",
-    "bedrock:ListFoundationModels"
-  ],
-  "Resource": "*"
-}
+```bash
+openclaw models auth login --provider openai
 ```
 
+OpenClaw stores OAuth access/refresh tokens in its auth store under the OpenClaw state directory and refreshes access tokens automatically when they expire.
+
 **Benefits**:
-- ✅ Automatic credential rotation
-- ✅ No secrets in code or config files
-- ✅ Centralized access control
-- ✅ CloudTrail audit logs
+- ✅ Avoids OpenAI API key on-demand billing
+- ✅ No OpenAI API key in CloudFormation, UserData, or SSM Parameter Store
+- ✅ OAuth tokens remain instance-local in the OpenClaw state directory
+- ✅ Re-authentication is explicit through SSM Session Manager
 
 ### 2. SSM Session Manager
 
@@ -108,7 +103,7 @@ AllowedSSHCIDR: 127.0.0.1/32  # Disables SSH
 
 ### 3. VPC Endpoints
 
-**Private Network**: Bedrock API calls stay within AWS network.
+**Private AWS Management Traffic**: SSM and CloudWatch API calls can stay within the AWS network. OpenAI OAuth/model traffic uses public HTTPS to OpenAI.
 
 **Benefits**:
 - ✅ Traffic doesn't traverse internet
@@ -116,7 +111,7 @@ AllowedSSHCIDR: 127.0.0.1/32  # Disables SSH
 - ✅ Compliance-friendly (HIPAA, SOC2)
 - ✅ Reduced attack surface
 
-**Cost**: ~$88/month for 6 interface endpoints across 2 AZs (S3 Gateway endpoint free)
+**Cost**: ~$58/month for 4 interface endpoints across 2 AZs (S3 Gateway endpoint free)
 
 ### 4. Docker Sandbox
 

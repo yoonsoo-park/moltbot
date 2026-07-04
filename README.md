@@ -1,26 +1,26 @@
-# OpenClaw on AWS with Bedrock
+# OpenClaw on AWS with OpenAI OAuth
 
-> Your own AI assistant on AWS — connects to WhatsApp, Telegram, Discord, Slack. Powered by Amazon Bedrock. No API keys. One-click deploy. From ~$30/month.
+> Your own AI assistant on AWS — connects to WhatsApp, Telegram, Discord, Slack. Powered by OpenAI Codex/ChatGPT OAuth subscription auth. SSM-only access. From ~$63/month plus your OpenAI subscription.
 
 English | [简体中文](README_CN.md)
 
 [![License](https://img.shields.io/badge/License-MIT--0-yellow?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Amazon Bedrock](https://img.shields.io/badge/Powered_by-Amazon_Bedrock-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)](https://aws.amazon.com/bedrock/)
+[![OpenAI OAuth](https://img.shields.io/badge/Powered_by-OpenAI_OAuth-111111?style=for-the-badge&logo=openai&logoColor=white)](https://docs.openclaw.ai/concepts/oauth)
 [![CloudFormation](https://img.shields.io/badge/IaC-CloudFormation-232F3E?style=for-the-badge&logo=amazonaws&logoColor=white)](https://aws.amazon.com/cloudformation/)
 
 ## Why This Exists
 
 [OpenClaw](https://github.com/openclaw/openclaw) is the fastest-growing open-source AI assistant — it runs on your hardware, connects to your messaging apps, and actually does things: manages email, browses the web, runs commands, schedules tasks.
 
-The problem: setting it up means managing API keys from multiple providers, configuring VPNs, and handling security yourself.
+The problem: setting it up means configuring servers, messaging integrations, secure access, and model credentials yourself.
 
 This project solves that. One CloudFormation stack gives you:
 
-- **Amazon Bedrock** for model access — 10 models, one unified API, IAM authentication (no API keys)
+- **OpenAI Codex/ChatGPT OAuth** for model access — no OpenAI API key required
 - **Graviton ARM instances** — 20-40% cheaper than x86
 - **SSM Session Manager** — secure access without opening ports
-- **VPC Endpoints** — traffic stays on AWS private network
-- **CloudTrail** — every API call audited automatically
+- **OpenClaw auth store** — OAuth access/refresh tokens are stored by OpenClaw and refreshed automatically
+- **Optional VPC Endpoints** — private access to AWS management APIs
 
 Deploy in 8 minutes. Access from your phone.
 
@@ -39,7 +39,7 @@ Deploy in 8 minutes. Access from your phone.
 | **EU (Ireland)** | [![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=eu-west-1#/stacks/create/review?stackName=openclaw-bedrock&templateURL=https://sharefile-jiade.s3.cn-northwest-1.amazonaws.com.cn/clawdbot-bedrock.yaml) |
 | **Asia Pacific (Tokyo)** | [![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home?region=ap-northeast-1#/stacks/create/review?stackName=openclaw-bedrock&templateURL=https://sharefile-jiade.s3.cn-northwest-1.amazonaws.com.cn/clawdbot-bedrock.yaml) |
 
-> **Prerequisites**: Bedrock model access is automatic — no manual enablement required. No SSH key needed — access via SSM Session Manager only.
+> **Prerequisites**: An eligible OpenAI Codex/ChatGPT account for OAuth login. No OpenAI API key is required. No SSH key needed — access via SSM Session Manager only.
 
 ### After Deployment
 
@@ -74,12 +74,29 @@ TOKEN=$(aws ssm get-parameter \
 echo "http://localhost:18789/?token=$TOKEN"
 ```
 
+### OpenAI OAuth Login
+
+Model invocation requires one post-deployment OAuth login on the instance:
+
+```bash
+aws ssm start-session --target $INSTANCE_ID --region us-west-2
+
+sudo -iu ubuntu
+openclaw models auth login --provider openai
+openclaw models status --probe
+systemctl --user restart openclaw-gateway
+```
+
+OpenClaw stores the OAuth access/refresh token in its auth store and refreshes it automatically when the access token expires. If refresh fails later, repeat the login command through SSM.
+
 ### CLI Deploy (Alternative)
 
 ```bash
 aws cloudformation create-stack \
   --stack-name openclaw-bedrock \
   --template-body file://clawdbot-bedrock.yaml \
+  --parameters \
+    ParameterKey=OpenAIModel,ParameterValue=gpt-5.4 \
   --capabilities CAPABILITY_IAM \
   --region us-west-2
 
@@ -120,7 +137,7 @@ Once connected, just message it:
 You: What's the weather in Tokyo?
 You: Summarize this PDF [attach file]
 You: Remind me every day at 9am to check emails
-You: Open google.com and search for "AWS Bedrock pricing"
+You: Open google.com and search for "OpenClaw OAuth"
 ```
 
 | Command | What it does |
@@ -143,11 +160,11 @@ You (WhatsApp/Telegram/Discord)
 ┌─────────────────────────────────────────────┐
 │  AWS Cloud                                  │
 │                                             │
-│  EC2 (OpenClaw)  ──IAM──▶  Bedrock         │
-│   (public subnet)         (Nova/Claude)     │
+│  EC2 (OpenClaw)  ──OAuth──▶  OpenAI        │
+│   (public subnet)          (gpt-5.4)        │
 │        │                                    │
-│   Internet Gateway    CloudTrail            │
-│   (direct access)     (audit logs)          │
+│   Internet Gateway    OpenClaw auth store   │
+│   (direct access)     (refresh token)       │
 └─────────────────────────────────────────────┘
   │
   ▼
@@ -155,32 +172,17 @@ You (receive response)
 ```
 
 - **EC2**: Runs OpenClaw gateway in public subnet (~1GB RAM, c7g.large recommended)
-- **Bedrock**: Model inference via IAM (no API keys)
+- **OpenAI OAuth**: Model inference through OpenClaw's OpenAI Codex/ChatGPT OAuth profile
 - **SSM**: Secure access, no public ports
 - **Internet Gateway**: Direct internet access (no NAT Gateway cost)
-- **VPC Endpoints**: Optional private network to Bedrock (+$88/mo for 6 interface endpoints, S3 Gateway free)
+- **VPC Endpoints**: Optional private network to AWS management services (+~$58/mo for 4 interface endpoints, S3 Gateway free). OpenAI OAuth/model traffic still uses public HTTPS.
 - **CloudWatch**: Auto-recovery, health monitoring, log shipping (optional, +$4/mo)
 
 ---
 
 ## Models
 
-Switch models with one CloudFormation parameter — no code changes:
-
-| Model | Input/Output per 1M tokens | Best for |
-|-------|---------------------------|----------|
-| **Nova 2 Lite** (default) | $0.30 / $2.50 | Everyday tasks, 90% cheaper than Claude |
-| Nova Pro | $0.80 / $3.20 | Balanced performance, multimodal |
-| Claude Opus 4.6 | $15.00 / $75.00 | Most capable, complex agentic tasks |
-| Claude Opus 4.5 | $15.00 / $75.00 | Deep analysis, extended thinking |
-| Claude Sonnet 4.5 | $3.00 / $15.00 | Complex reasoning, coding |
-| Claude Sonnet 4 | $3.00 / $15.00 | Reliable coding and analysis |
-| Claude Haiku 4.5 | $1.00 / $5.00 | Fast and efficient |
-| DeepSeek R1 | $0.55 / $2.19 | Open-source reasoning |
-| Llama 3.3 70B | — | Open-source alternative |
-| Kimi K2.5 | $0.60 / $3.00 | Multimodal agentic, 262K context |
-
-> Uses [Global CRIS profiles](https://docs.aws.amazon.com/bedrock/latest/userguide/cross-region-inference.html) — deploy in any region, requests auto-route to optimal locations.
+Switch OpenAI models with the `OpenAIModel` CloudFormation parameter — no code changes. The default is `gpt-5.4`. After deployment, run `openclaw models auth login --provider openai` on the instance to create the OAuth profile used by the gateway.
 
 ---
 
@@ -193,18 +195,18 @@ Switch models with one CloudFormation parameter — no code changes:
 | EC2 (c7g.large, Graviton) | ~$53 | Default (2 vCPU, 4GB RAM) |
 | EBS (30GB gp3 x2) | $4.80 | Required (root + data volumes) |
 | CloudWatch Monitoring | ~$4 | ✅ Disable to save ~$4/mo |
-| VPC Endpoints (6 interface) | ~$88 | ✅ Enable for private network (+$88/mo, S3 Gateway free) |
+| VPC Endpoints (4 interface) | ~$58 | ✅ Enable for private AWS management APIs (+~$58/mo, S3 Gateway free) |
 | ALB + CloudFront | $22.80 | ✅ Enable for public access (+$22.80/mo) |
 | AWS WAF | ~$10 | ✅ Only if deploy to us-east-1 (+$10/mo) |
-| Bedrock (Nova 2 Lite, ~100 conv/day) | $5.55 | Pay-per-use (~6M input + 1.5M output tokens/mo) |
-| **Total (default: VPCe OFF, monitoring ON)** | **~$67/mo** | EC2 + CloudWatch + Bedrock (saves $34/mo, no NAT) |
+| OpenAI OAuth | Subscription | Uses your eligible OpenAI Codex/ChatGPT OAuth login, not an OpenAI API key |
+| **Total (default: VPCe OFF, monitoring ON)** | **~$63/mo + OpenAI subscription** | EC2 + CloudWatch, no NAT |
 | **Total (minimal: VPCe OFF, monitoring OFF)** | **~$63/mo** | Save ~$4/mo by disabling CloudWatch (saves $38/mo vs old default) |
-| **Total (VPC Endpoints ON)** | **~$155/mo** | Add ~$88/mo for 6 interface endpoints across 2 AZs (S3 Gateway free) |
+| **Total (VPC Endpoints ON)** | **~$121/mo + OpenAI subscription** | Add ~$58/mo for 4 interface endpoints across 2 AZs (S3 Gateway free) |
 | **Total (public access, no WAF)** | **~$90/mo** | Add $22.80/mo (ALB + CloudFront) |
-| **Total (public + VPCe, no WAF)** | **~$178/mo** | Add $111/mo (VPCe + public access) |
-| **Total (full security: public + VPCe + WAF, us-east-1)** | **~$188/mo** | Add $121/mo (full security stack) |
+| **Total (public + VPCe, no WAF)** | **~$150/mo + OpenAI subscription** | Add VPC endpoints + public access |
+| **Total (full security: public + VPCe + WAF, us-east-1)** | **~$160/mo + OpenAI subscription** | Add full security stack |
 
-> **Cost optimization**: Use `t4g.medium` ($24/mo) or `r7g.medium` ($30/mo, 8GB RAM) instead of c7g.large to save ~$30/mo. Enable VPC Endpoints only if you need private network routing (adds ~$88/mo for 6 interface endpoints). **NAT Gateway removed** — saves $34/mo vs previous architecture.
+> **Cost optimization**: Use `t4g.medium` ($24/mo) or `r7g.medium` ($39/mo, 8GB RAM) instead of c7g.large to save. Enable VPC Endpoints only if you need private AWS management traffic (adds ~$58/mo for 4 interface endpoints). **NAT Gateway removed** — saves ~$34/mo vs previous architecture.
 
 **Always included at no extra cost:**
 - 2GB swap (prevents OOM crashes)
@@ -227,21 +229,21 @@ Switch models with one CloudFormation parameter — no code changes:
 
 | Configuration | Monthly Cost | What You Get |
 |--------------|-------------|--------------|
-| **Default (VPCe OFF, monitoring ON)** | **~$67** | EC2 c7g.large ($53) + EBS 60GB ($4.80) + CloudWatch ($4) + Bedrock Nova 2 Lite ($5.55). Traffic via Internet Gateway to AWS public endpoints (TLS encrypted). SSM-only access. **Saves $34/mo** (no NAT Gateway). |
+| **Default (VPCe OFF, monitoring ON)** | **~$63 + OpenAI subscription** | EC2 c7g.large ($53) + EBS 60GB ($4.80) + CloudWatch ($4). OpenAI model access uses OAuth subscription auth. SSM-only access. **Saves $34/mo** (no NAT Gateway). |
 | **Minimal (VPCe OFF, monitoring OFF)** | **~$63** | Above minus CloudWatch monitoring. Save ~$4/mo. Lose auto-recovery, health alarms, log shipping. **Saves $38/mo vs old architecture**. |
-| **Private Network (VPCe ON, monitoring ON)** | **~$155** | Default + 6 interface VPC endpoints across 2 AZs (**$14.60/endpoint/mo × 6 = $87.60**): Bedrock Runtime, Bedrock Mantle (conditional), SSM, SSM Messages, EC2 Messages, CloudWatch Logs. S3 Gateway endpoint free. Add **~$88/mo** (includes data processing). **All AWS API traffic stays on private network (never touches internet).** |
+| **Private AWS Management (VPCe ON, monitoring ON)** | **~$121 + OpenAI subscription** | Default + 4 interface VPC endpoints across 2 AZs (**$14.60/endpoint/mo × 4 = $58.40**): SSM, SSM Messages, EC2 Messages, CloudWatch Logs. S3 Gateway endpoint free. OpenAI OAuth/model traffic uses public HTTPS. |
 | **Public Access (VPCe OFF, no WAF)** | **~$90** | Default + ALB ($22.27) + CloudFront ($0.53). Add **$22.80/mo**. HTTPS via CloudFront, but CloudFront→ALB uses HTTP (not end-to-end TLS). No Layer 7 WAF. |
-| **Public + Private Network (VPCe ON, no WAF)** | **~$178** | Above + 6 VPC endpoints. Add **$111/mo** total. |
-| **Full Security (public + VPCe + WAF, us-east-1 only)** | **~$188** | Above + AWS WAF (~$10): Web ACL + 5 managed rules (SQL injection, XSS, bad inputs, Linux protection, rate limiting 1000 req/5min). Add **$121/mo** total. ⚠️ **WAF only works in us-east-1** — other regions silently skip WAF (no Layer 7 protection, only Shield Standard Layer 3/4). |
+| **Public + Private AWS Management (VPCe ON, no WAF)** | **~$150 + OpenAI subscription** | Public access plus 4 AWS management VPC endpoints. |
+| **Full Security (public + VPCe + WAF, us-east-1 only)** | **~$160 + OpenAI subscription** | Above + AWS WAF (~$10): Web ACL + 5 managed rules (SQL injection, XSS, bad inputs, Linux protection, rate limiting 1000 req/5min). ⚠️ **WAF only works in us-east-1** — other regions silently skip WAF (no Layer 7 protection, only Shield Standard Layer 3/4). |
 
 ### Save Money
 
-- **Use Nova 2 Lite instead of Claude** → 90% cheaper inference ($0.30 vs $3-15 per 1M input tokens). **Already default** ✅
+- **Use OpenAI OAuth subscription auth** → avoids OpenAI API key on-demand billing for this deployment path. **Already default** ✅
 - **Use Graviton (ARM) instead of x86** → 20-40% cheaper EC2. c7g.large (~$53/mo) vs r5.large x86 ($92/mo). **Already default** ✅
 - **No NAT Gateway** → **Saves $34/mo** vs previous architecture. Instance in public subnet with direct Internet Gateway access. **New default** ✅
 - **Use smaller instance type** → **t4g.medium** ($24.53/mo, 4GB RAM) **saves $28.40/mo** (54% cheaper) vs c7g.large. Trade-off: Less CPU for Docker sandbox. Good for light usage (<10 users).
 - **Use r7g.medium** → $39.13/mo (8GB RAM) **saves $13.80/mo** (26% cheaper) vs c7g.large. More memory for plugins/embeddings, but only 1 vCPU.
-- **Default config (VPCe OFF)** → **saves ~$88/mo** vs private network. Traffic goes via Internet Gateway to AWS public endpoints (TLS encrypted). **Best cost/benefit ratio for most use cases.** ✅
+- **Default config (VPCe OFF)** → **saves ~$58/mo** vs private AWS management endpoints. Traffic goes via Internet Gateway to HTTPS endpoints. **Best cost/benefit ratio for most use cases.** ✅
 - **Skip public access** (`EnablePublicAccess=false`) → **saves $22.80/mo** (no ALB + CloudFront). Use SSM Session Manager only. **Already default** ✅
 - **Disable monitoring** (`EnableMonitoring=false`) → **saves ~$4/mo** (lose auto-recovery alarms, health metrics, log shipping to CloudWatch). Not recommended for production.
 - **AWS Savings Plans** → **30-40% off EC2** for 1-3 year commitment. c7g.large: ~$53/mo → **~$31.76-37.05/mo** (save $15-21/mo). Must commit to instance family (c7g). Best for long-term deployments.
@@ -284,10 +286,10 @@ Switch models with one CloudFormation parameter — no code changes:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `OpenClawModel` | `global.amazon.nova-2-lite-v1:0` | Bedrock model ID - Nova 2 Lite offers best price-performance for everyday tasks. 10 models available: Nova 2 Lite, Claude Sonnet 4.5, Nova Pro, Claude Opus 4.6, Claude Opus 4.5, Claude Haiku 4.5, Claude Sonnet 4, DeepSeek R1, Llama 3.3 70B, Kimi K2.5 |
+| `OpenAIModel` | `gpt-5.4` | OpenAI model ID used after post-deployment OpenAI Codex/ChatGPT OAuth login |
 | `OpenClawVersion` | `2026.4.27` | OpenClaw version. `2026.3.24` (no model approval needed, WeChat compatible), `2026.4.5` / `2026.4.10` / `2026.4.27` (auto-discovery, embeddings), or `latest` (not recommended for production) |
 | `InstanceType` | `c7g.large` | EC2 instance type. Graviton (ARM) recommended. **c7g = compute-optimized** (recommended, 2 vCPU for Node.js + Docker sandbox), **r7g/r6g = memory-optimized** (plugins, embeddings), **t4g = burstable** (cost-optimized). 14 ARM + 7 x86 instance types available |
-| `CreateVPCEndpoints` | `false` | Create VPC endpoints for private network access (**~$88/mo** for 6 interface endpoints across 2 AZs: Bedrock Runtime, Bedrock Mantle (conditional on region), SSM, SSM Messages, EC2 Messages, CloudWatch Logs. Each endpoint: **$0.01/hour/AZ × 2 AZs × 730 hours = $14.60/mo**. Plus data processing charges. S3 Gateway endpoint free). **Default OFF to minimize cost**. Traffic goes via Internet Gateway to AWS public HTTPS endpoints instead (TLS encrypted, no security downside for most use cases). Enable only if compliance requires private network routing (adds **~$88/mo**). |
+| `CreateVPCEndpoints` | `false` | Create VPC endpoints for private AWS management access (**~$58/mo** for 4 interface endpoints across 2 AZs: SSM, SSM Messages, EC2 Messages, CloudWatch Logs. S3 Gateway endpoint free). OpenAI OAuth/model traffic still uses public HTTPS. |
 | `EnableMonitoring` | `true` | Enable CloudWatch monitoring, EC2 auto-recovery + reboot alarms, metrics (memory, disk, swap), and log shipping (~$4/mo). **Recommended ON** for production |
 | `EnableSandbox` | `true` | Install Docker for sandboxed command execution (recommended for group chats and untrusted code). Adds ~500MB disk usage |
 | `EnableDataProtection` | `false` | Retain both EBS volume and S3 bucket when stack is deleted (protects against accidental data loss). **Set to true for production** |
@@ -419,14 +421,15 @@ Uses SiliconFlow (DeepSeek, Qwen, GLM) instead of Bedrock. Requires a SiliconFlo
 | Layer | What it does |
 |-------|-------------|
 | **No SSH** | Zero SSH keys, zero SSH ports. SSM Session Manager only. |
-| **IAM Roles** | No API keys — automatic credential rotation via EC2 instance profile |
+| **OpenAI OAuth** | Model auth uses OpenAI Codex/ChatGPT OAuth, not an OpenAI API key |
+| **IAM Roles** | AWS management access uses the EC2 instance profile |
 | **IMDSv2 Enforced** | Instance metadata requires secure token (`HttpTokens: required`, no v1 fallback) |
 | **SSM Session Manager** | No public ports (22/3389/18789), session logging, encrypted tunnel |
-| **VPC Endpoints (optional)** | Bedrock + SSM traffic stays on AWS private network (never touches internet) |
+| **VPC Endpoints (optional)** | AWS management traffic can stay on AWS private network |
 | **SSM Parameter Store** | Gateway token stored as SecureString (KMS-encrypted), never written to disk |
 | **Supply-chain protection** | Docker via GPG-signed repos, NVM via download-then-execute (no `curl \| sh`), npm registry hardcoded |
 | **Docker Sandbox** | Isolates code execution in group chats (prevents host compromise) |
-| **CloudTrail** | Every Bedrock API call audited (who, when, what model, what input/output) |
+| **CloudTrail** | AWS management API activity is audited |
 | **Public subnet (no public IP)** | EC2 in public subnet without public IP, outbound via Internet Gateway |
 | **Security groups** | Minimal ingress (ALB only if public access enabled), full egress |
 | **Network ACLs** | Stateless firewall on VPC endpoint subnets (conditional, HTTPS + ephemeral only) |

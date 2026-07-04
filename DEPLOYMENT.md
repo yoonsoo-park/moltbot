@@ -41,7 +41,11 @@ aws configure
 # Enter default output format (json)
 ```
 
-### 4. Create EC2 Key Pair
+### 4. OpenAI Account
+
+Use an OpenAI account with eligible Codex/ChatGPT OAuth access. Do not create or configure an OpenAI API key for this deployment path.
+
+### 5. Create EC2 Key Pair
 
 ```bash
 aws ec2 create-key-pair \
@@ -65,10 +69,10 @@ https://github.com/aws-samples/sample-OpenClaw-on-AWS-with-Bedrock
 ```bash
 aws cloudformation create-stack \
   --stack-name OpenClaw-bedrock \
-  --template-body file://openclaw-bedrock.yaml \
+  --template-body file://clawdbot-bedrock.yaml \
   --parameters \
     ParameterKey=KeyPairName,ParameterValue=OpenClaw-key \
-    ParameterKey=openclawModel,ParameterValue=global.amazon.nova-2-lite-v1:0 \
+    ParameterKey=OpenAIModel,ParameterValue=gpt-5.4 \
     ParameterKey=InstanceType,ParameterValue=t4g.medium \
     ParameterKey=CreateVPCEndpoints,ParameterValue=true \
   --capabilities CAPABILITY_IAM \
@@ -81,9 +85,9 @@ aws cloudformation wait stack-create-complete \
 ```
 
 **Default Configuration:**
-- **Model**: Nova 2 Lite (90% cheaper than Claude, excellent for everyday tasks)
+- **Model**: gpt-5.4 via OpenAI Codex/ChatGPT OAuth
 - **Instance**: t4g.medium (Graviton ARM, 20% cheaper than t3.medium)
-- **VPC Endpoints**: Enabled (private network, more secure)
+- **VPC Endpoints**: Enabled for AWS management services. OpenAI OAuth/model traffic uses public HTTPS.
 
 ## Accessing OpenClaw
 
@@ -127,6 +131,21 @@ aws ssm get-parameter --name /openclaw/openclaw-bedrock/gateway-token --with-dec
 ```
 
 ### Step 4: Open Web UI
+
+### Step 5: Log in to OpenAI OAuth
+
+Run this once on the instance before model invocation works:
+
+```bash
+aws ssm start-session --target $INSTANCE_ID --region us-west-2
+
+sudo -iu ubuntu
+openclaw models auth login --provider openai
+openclaw models status --probe
+systemctl --user restart openclaw-gateway
+```
+
+OpenClaw stores the OAuth access/refresh token in its auth store and refreshes it automatically. If refresh fails later, repeat the login command.
 
 Open in browser:
 ```
