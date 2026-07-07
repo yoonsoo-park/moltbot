@@ -193,3 +193,28 @@ Access flow: Local machine -> SSM Session Manager port forwarding -> EC2 localho
 ## License
 
 MIT No Attribution (MIT-0) -- see LICENSE file.
+
+## Project Purpose
+
+- Describe what "openclaw-aws" is responsible for.
+
+## Agent Operating Rules
+
+- Start by reading this file and use cxdoc search commands before relying on memory.
+- Use `cxdoc current . --json` to confirm the project mapping when context matters.
+- Keep durable project instructions in this file; keep searchable details in cxdoc knowledge notes.
+
+## Validation Commands
+
+- Document the main test, lint, build, and smoke commands for this project.
+
+## Deployment And Release Notes
+
+- Document deployment entrypoints, environments, and rollback cautions when they exist.
+
+## Privacy And Secrets
+
+- Do not commit secrets, credentials, tokens, or private customer data.
+- Prefer local/private configuration stores for sensitive operational details.
+
+## cxdoc managed memory

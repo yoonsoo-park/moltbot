@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "command": "/Users/yoonsoopark/code/codex-hub/scripts/codex-session-start-hook.sh"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "command": "/Users/yoonsoopark/code/codex-hub/scripts/codex-pre-tool-use-hook.sh"
+      }
+    ],
+    "Stop": [
+      {
+        "command": "/Users/yoonsoopark/code/codex-hub/scripts/codex-stop-hook.sh"
+      }
+    ]
+  }
+}
